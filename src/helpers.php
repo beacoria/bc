@@ -1,175 +1,195 @@
 <?php
 
-/**
- * @param $value
- * @return string
- */
-function normalizeNumberForBc($value)
-{
-    $result = trim($value);
+if (!function_exists('normalizeNumberForBc')) {
+    /**
+     * @param $value
+     * @return string
+     */
+    function normalizeNumberForBc($value)
+    {
+        $result = trim($value);
 
-    if (stripos($result, 'e') !== false) {
-        $array = preg_split('/e/i', $result);
-        $base = trim($array[0]);
-        $exp = (int)trim($array[1]);
+        if (stripos($result, 'e') !== false) {
+            $array = preg_split('/e/i', $result);
+            $base = trim($array[0]);
+            $exp = (int)trim($array[1]);
 
-        if ($base[0] === '+') {
-            $base = substr($base, 1);
+            if ($base[0] === '+') {
+                $base = substr($base, 1);
+            }
+
+            $tenPow = bcpow('10', (string)abs($exp));
+
+            $scale = strlen(strstr($base, '.')) - 1 + abs($exp) + 10;
+
+            $result = $exp < 0
+                ? bcdiv($base, $tenPow, $scale)
+                : bcmul($base, $tenPow, $scale);
         }
 
-        $tenPow = bcpow('10', (string)abs($exp));
+        $pos = strpos($result, '.');
+        if ($pos !== false) {
+            $result = rtrim($result, '0');
+            $scale = strlen(substr($result, $pos + 1));
+        } else {
+            $scale = 0;
+        }
 
-        $scale = strlen(strstr($base, '.')) - 1 + abs($exp) + 10;
-
-        $result = $exp < 0
-            ? bcdiv($base, $tenPow, $scale)
-            : bcmul($base, $tenPow, $scale);
+        return bcadd($result, '0', $scale);
     }
+}
 
-    $pos = strpos($result, '.');
-    if ($pos !== false) {
-        $result = rtrim($result, '0');
-        $scale = strlen(substr($result, $pos + 1));
-    } else {
-        $scale = 0;
+if (!function_exists('decimalPlaces')) {
+    /**
+     * @param mixed ...$decimals
+     * @return int
+     */
+    function decimalPlaces(...$decimals)
+    {
+        $max = 0;
+
+        foreach ($decimals as $decimal) {
+            $decimal = normalizeNumberForBc($decimal);
+            $pos = strpos($decimal, '.');
+            $length = $pos !== false ? strlen(substr($decimal, $pos + 1)) : 0;
+            $max = max($max, $length);
+        }
+
+        return $max;
     }
-
-    return bcadd($result, '0', $scale);
 }
 
-/**
- * @param mixed ...$decimals
- * @return int
- */
-function decimalPlaces(...$decimals)
-{
-    $max = 0;
+if (!function_exists('clearDecimal')) {
+    /**
+     * @param string $amount
+     * @param int|null $decimal
+     * @return string
+     */
+    function clearDecimal($amount, $decimal = null)
+    {
+        $result = normalizeNumberForBc($amount);
+        if ($decimal !== null) {
+            $result = bcadd($result, '0', $decimal);
+        }
 
-    foreach ($decimals as $decimal) {
-        $decimal = normalizeNumberForBc($decimal);
-        $pos = strpos($decimal, '.');
-        $length = $pos !== false ? strlen(substr($decimal, $pos + 1)) : 0;
-        $max = max($max, $length);
+        return $result;
     }
-
-    return $max;
 }
 
-/**
- * @param $number
- * @return bool
- */
-function gt0($number)
-{
-    return gt($number, '0', false);
-}
+if (!function_exists('gt')) {
+    /**
+     * @param $left
+     * @param $right
+     * @param bool $eq
+     * @param int|null $decimal
+     * @return bool
+     */
+    function gt($left, $right, $eq = true, $decimal = null)
+    {
+        $left = normalizeNumberForBc($left);
+        $right = normalizeNumberForBc($right);
 
-/**
- * @param $left
- * @param $right
- * @param bool $eq
- * @param int|null $decimal
- * @return bool
- */
-function gt($left, $right, $eq = true, $decimal = null)
-{
-    $left = normalizeNumberForBc($left);
-    $right = normalizeNumberForBc($right);
+        $decimal = $decimal === null ? decimalPlaces($left, $right) : (int)$decimal;
 
-    $decimal = $decimal === null ? decimalPlaces($left, $right) : (int)$decimal;
-
-    return $eq
-        ? bccomp($left, $right, $decimal) >= 0
-        : bccomp($left, $right, $decimal) > 0;
-}
-
-/**
- * @param $left
- * @param $right
- * @param bool $eq
- * @param int|null $decimal
- * @return bool
- */
-function lt($left, $right, $eq = true, $decimal = null)
-{
-    return !gt($left, $right, !$eq, $decimal);
-}
-
-/**
- * @param ...$numbers
- * @return string
- */
-function bcaddd(...$numbers)
-{
-    $sum = '0';
-
-    foreach ($numbers as $number) {
-        $number = normalizeNumberForBc($number);
-        $sum = bcadd($sum, $number, decimalPlaces($sum, $number));
+        return $eq
+            ? bccomp($left, $right, $decimal) >= 0
+            : bccomp($left, $right, $decimal) > 0;
     }
-
-    return $sum;
 }
 
-/**
- * @param $left
- * @param $right
- * @param int|null $decimal
- * @return string
- */
-function bcsubSafe($left, $right, $decimal = null)
-{
-    $left = normalizeNumberForBc($left);
-    $right = normalizeNumberForBc($right);
-
-    return clearDecimal(bcsub($left, $right, decimalPlaces($left, $right)), $decimal);
-}
-
-/**
- * @param $left
- * @param $right
- * @param int|null $decimal
- * @return string
- */
-function bcmulSafe($left, $right, $decimal = null)
-{
-    $left = normalizeNumberForBc($left);
-    $right = normalizeNumberForBc($right);
-
-    $scale = decimalPlaces($left) + decimalPlaces($right);
-
-    return clearDecimal(bcmul($left, $right, $scale), $decimal);
-}
-
-/**
- * @param $left
- * @param $right
- * @param int|null $decimal
- * @return string
- */
-function bcdivSafe($left, $right, $decimal = null)
-{
-    $left = normalizeNumberForBc($left);
-    $right = normalizeNumberForBc($right);
-
-    if (bccomp($right, '0', decimalPlaces($right)) <= 0) {
-        return '0';
+if (!function_exists('gt0')) {
+    /**
+     * @param $number
+     * @return bool
+     */
+    function gt0($number)
+    {
+        return gt($number, '0', false);
     }
-
-    return clearDecimal(bcdiv($left, $right, 20), $decimal);
 }
 
-/**
- * @param string $amount
- * @param int|null $decimal
- * @return string
- */
-function clearDecimal($amount, $decimal = null)
-{
-    $result = normalizeNumberForBc($amount);
-    if ($decimal !== null) {
-        $result = bcadd($result, '0', $decimal);
+if (!function_exists('lt')) {
+    /**
+     * @param $left
+     * @param $right
+     * @param bool $eq
+     * @param int|null $decimal
+     * @return bool
+     */
+    function lt($left, $right, $eq = true, $decimal = null)
+    {
+        return !gt($left, $right, !$eq, $decimal);
     }
+}
 
-    return $result;
+if (!function_exists('bcaddd')) {
+    /**
+     * @param ...$numbers
+     * @return string
+     */
+    function bcaddd(...$numbers)
+    {
+        $sum = '0';
+
+        foreach ($numbers as $number) {
+            $number = normalizeNumberForBc($number);
+            $sum = bcadd($sum, $number, decimalPlaces($sum, $number));
+        }
+
+        return $sum;
+    }
+}
+
+if (!function_exists('bcsubSafe')) {
+    /**
+     * @param $left
+     * @param $right
+     * @param int|null $decimal
+     * @return string
+     */
+    function bcsubSafe($left, $right, $decimal = null)
+    {
+        $left = normalizeNumberForBc($left);
+        $right = normalizeNumberForBc($right);
+
+        return clearDecimal(bcsub($left, $right, decimalPlaces($left, $right)), $decimal);
+    }
+}
+
+if (!function_exists('bcmulSafe')) {
+    /**
+     * @param $left
+     * @param $right
+     * @param int|null $decimal
+     * @return string
+     */
+    function bcmulSafe($left, $right, $decimal = null)
+    {
+        $left = normalizeNumberForBc($left);
+        $right = normalizeNumberForBc($right);
+
+        $scale = decimalPlaces($left) + decimalPlaces($right);
+
+        return clearDecimal(bcmul($left, $right, $scale), $decimal);
+    }
+}
+
+if (!function_exists('bcdivSafe')) {
+    /**
+     * @param $left
+     * @param $right
+     * @param int|null $decimal
+     * @return string
+     */
+    function bcdivSafe($left, $right, $decimal = null)
+    {
+        $left = normalizeNumberForBc($left);
+        $right = normalizeNumberForBc($right);
+
+        if (bccomp($right, '0', decimalPlaces($right)) <= 0) {
+            return '0';
+        }
+
+        return clearDecimal(bcdiv($left, $right, 20), $decimal);
+    }
 }
