@@ -1,0 +1,24 @@
+{
+    "name": "beacoria/bc",
+    "description": "Extends the BCMath function set with support for converting scientific notation to standard decimal format.",
+    "type": "library",
+    "require": {
+        "php": ">=5.6",
+        "ext-bcmath": "*"
+    },
+    "license": "MIT",
+    "autoload": {
+        "files": [
+            "src/helpers.php"
+        ],
+        "psr-4": {
+            "Beacoria\\Bc\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "beacoria"
+        }
+    ],
+    "minimum-stability": "stable"
+}
